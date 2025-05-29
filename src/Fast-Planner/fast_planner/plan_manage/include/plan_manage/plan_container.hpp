@@ -223,6 +223,8 @@ public:
 
   // kinodynamic path
   vector<Eigen::Vector3d> kino_path_;
+  vector<Eigen::Vector3d> all_kino_path_;
+  vector<Eigen::Vector3d> shot_path_;
 
   // topological paths
   list<GraphNode::Ptr> topo_graph_;

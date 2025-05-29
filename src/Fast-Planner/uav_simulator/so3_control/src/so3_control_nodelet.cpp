@@ -88,6 +88,7 @@ SO3ControlNodelet::publishSO3Command(void)
   so3_command->aux.angle_corrections[1] = corrections_[2];
   so3_command->aux.enable_motors        = enable_motors_;
   so3_command->aux.use_external_yaw     = use_external_yaw_;
+  std::cout<<"enter so3 cmd"<<std::endl;
   so3_command_pub_.publish(so3_command);
 }
 

@@ -1,7 +1,6 @@
 /**
 * This file is part of Fast-Planner.
-*
-* Copyright 2019 Boyu Zhou, Aerial Robotics Group, Hong Kong University of Science and Technology, <uav.ust.hk>
+* Copyright 2019 Boyu Zhou, Aerial Robotics Group, HKUST
 * Developed by Boyu Zhou <bzhouai at connect dot ust dot hk>, <uv dot boyuzhou at gmail dot com>
 * for more information see <https://github.com/HKUST-Aerial-Robotics/Fast-Planner>.
 * If you use this code, please cite the respective publications as
@@ -20,10 +19,12 @@
 * You should have received a copy of the GNU Lesser General Public License
 * along with Fast-Planner. If not, see <http://www.gnu.org/licenses/>.
 */
-
 #include <path_searching/kinodynamic_astar.h>
+ // 动力学A*头文件
 #include <sstream>
-#include <plan_env/sdf_map.h>
+#include <plan_env/sdf_map.h> // SDF地图环境相关
+
+
 
 using namespace std;
 using namespace Eigen;
@@ -31,17 +32,17 @@ using namespace Eigen;
 namespace fast_planner
 {
 
-// 析构函数，释放节点内存
+// 析构函数，释放节点池内存，防止内存泄漏
 KinodynamicAstar::~KinodynamicAstar()
 {
-  for (int i = 0; i < allocate_num_; i++)
+  for (int i = 0; i < allocate_num_; i++) // 遍历所有分配的节点
   {
-    delete path_node_pool_[i];
+    delete path_node_pool_[i]; // 释放每个节点
   }
 }
 
 /**
- * 动力学A*主搜索函数
+ * @brief 动力学A*主搜索函数
  * @param start_pt 起点位置
  * @param start_v  起点速度
  * @param start_a  起点加速度
@@ -72,7 +73,8 @@ int KinodynamicAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, 
   end_state.head(3) = end_pt; // 终点位置
   end_state.tail(3) = end_v;  // 终点速度
   end_index = posToIndex(end_pt); // 终点索引
-  // 估算启发式代价（启发式函数，常用最优时间或能量）
+
+  // 估算启发式代价（如最优时间或能量），用于A*优先队列排序
   cur_node->f_score = lambda_heu_ * estimateHeuristic(cur_node->state, end_state, time_to_goal);
   cur_node->node_state = IN_OPEN_SET; // 标记为open set
   open_set_.push(cur_node); // 加入open set优先队列
@@ -81,11 +83,10 @@ int KinodynamicAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, 
   // 动态环境下，记录时间信息
   if (dynamic)
   {
-    time_origin_ = time_start;
-    cur_node->time = time_start;
-    cur_node->time_idx = timeToIndex(time_start);
+    time_origin_ = time_start; // 记录起始时间
+    cur_node->time = time_start; // 节点时间
+    cur_node->time_idx = timeToIndex(time_start); // 时间索引
     expanded_nodes_.insert(cur_node->index, cur_node->time_idx, cur_node); // 记录已扩展节点
-    // cout << "time start: " << time_start << endl;
   }
   else
     expanded_nodes_.insert(cur_node->index, cur_node); // 静态环境只记录空间索引
@@ -318,7 +319,6 @@ int KinodynamicAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, 
           {
             if (tmp_g_score < pro_node->g_score)
             {
-              // pro_node->index = pro_id;
               pro_node->state = pro_state;
               pro_node->f_score = tmp_f_score;
               pro_node->g_score = tmp_g_score;
@@ -344,6 +344,10 @@ int KinodynamicAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, 
   return NO_PATH;
 }
 
+/**
+ * @brief 设置搜索相关参数
+ * @param nh ROS节点句柄
+ */
 void KinodynamicAstar::setParam(ros::NodeHandle& nh)
 {
   nh.param("search/max_tau", max_tau_, -1.0);
@@ -365,6 +369,10 @@ void KinodynamicAstar::setParam(ros::NodeHandle& nh)
   max_vel_ += vel_margin;
 }
 
+/**
+ * @brief 回溯路径，将搜索到的路径节点存入path_nodes_
+ * @param end_node 路径终点节点
+ */
 void KinodynamicAstar::retrievePath(PathNodePtr end_node)
 {
   PathNodePtr cur_node = end_node;
@@ -378,19 +386,28 @@ void KinodynamicAstar::retrievePath(PathNodePtr end_node)
 
   reverse(path_nodes_.begin(), path_nodes_.end());
 }
+
+/**
+ * @brief 启发式代价估计函数
+ * @param x1 当前状态
+ * @param x2 目标状态
+ * @param optimal_time 返回最优时间
+ * @return 启发式代价
+ */
 double KinodynamicAstar::estimateHeuristic(Eigen::VectorXd x1, Eigen::VectorXd x2, double& optimal_time)
 {
-  const Vector3d dp = x2.head(3) - x1.head(3);
-  const Vector3d v0 = x1.segment(3, 3);
-  const Vector3d v1 = x2.segment(3, 3);
+  const Vector3d dp = x2.head(3) - x1.head(3); // 位置差
+  const Vector3d v0 = x1.segment(3, 3);        // 当前速度
+  const Vector3d v1 = x2.segment(3, 3);        // 目标速度
 
+  // 对代价函数求导的多项式的系数
   double c1 = -36 * dp.dot(dp);
   double c2 = 24 * (v0 + v1).dot(dp);
   double c3 = -4 * (v0.dot(v0) + v0.dot(v1) + v1.dot(v1));
   double c4 = 0;
   double c5 = w_time_;
 
-  std::vector<double> ts = quartic(c5, c4, c3, c2, c1);
+  std::vector<double> ts = quartic(c5, c4, c3, c2, c1); // 求解四次方程
 
   double v_max = max_vel_ * 0.5;
   double t_bar = (x1.head(3) - x2.head(3)).lpNorm<Infinity>() / v_max;
@@ -416,6 +433,36 @@ double KinodynamicAstar::estimateHeuristic(Eigen::VectorXd x1, Eigen::VectorXd x
   return 1.0 * (1 + tie_breaker_) * cost;
 }
 
+std::vector<Eigen::Vector3d> KinodynamicAstar::GetShotTraj()
+{
+    std::vector<Eigen::Vector3d> shot_traj;
+  if (is_shot_succ_) {
+
+  double delta_t = 0.05; // 采样间隔
+  for (double t = 0; t <= t_shot_ + 1e-6; t += delta_t) {
+    Eigen::VectorXd time_vec(4);
+    for (int j = 0; j < 4; ++j)
+      time_vec(j) = pow(t, j);
+
+    Eigen::Vector3d pt;
+    for (int dim = 0; dim < 3; ++dim)
+      pt(dim) = coef_shot_.row(dim).dot(time_vec);
+
+    shot_traj.push_back(pt);
+  }
+  
+  // shot_traj 就是shot段的所有采样点
+}
+return shot_traj;
+
+} // namespace fast_planner
+/**
+ * @brief 计算起点到终点的三次多项式“射线”轨迹
+ * @param state1 起点状态
+ * @param state2 终点状态
+ * @param time_to_goal 轨迹持续时间
+ * @return 是否成功生成无碰撞射线轨迹
+ */
 bool KinodynamicAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal)
 {
   /* ---------- get coefficient ---------- */
@@ -428,12 +475,12 @@ bool KinodynamicAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd s
   MatrixXd coef(3, 4);
   end_vel_ = v1;
 
+  // 计算三次多项式系数
   Vector3d a = 1.0 / 6.0 * (-12.0 / (t_d * t_d * t_d) * (dp - v0 * t_d) + 6 / (t_d * t_d) * dv);
   Vector3d b = 0.5 * (6.0 / (t_d * t_d) * (dp - v0 * t_d) - 2 / t_d * dv);
   Vector3d c = v0;
   Vector3d d = p0;
 
-  // 1/6 * alpha * t^3 + 1/2 * beta * t^2 + v0
   // a*t^3 + b*t^2 + v0*t + p0
   coef.col(3) = a, coef.col(2) = b, coef.col(1) = c, coef.col(0) = d;
 
@@ -461,20 +508,19 @@ bool KinodynamicAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd s
 
       if (fabs(vel(dim)) > max_vel_ || fabs(acc(dim)) > max_acc_)
       {
-        // cout << "vel:" << vel(dim) << ", acc:" << acc(dim) << endl;
+        // 超过速度或加速度约束
         // return false;
       }
     }
 
+    // 检查是否越界
     if (coord(0) < origin_(0) || coord(0) >= map_size_3d_(0) || coord(1) < origin_(1) || coord(1) >= map_size_3d_(1) ||
         coord(2) < origin_(2) || coord(2) >= map_size_3d_(2))
     {
       return false;
     }
 
-    // if (edt_environment_->evaluateCoarseEDT(coord, -1.0) <= margin_) {
-    //   return false;
-    // }
+    // 检查碰撞
     if (edt_environment_->sdf_map_->getInflateOccupancy(coord) == 1)
     {
       return false;
@@ -486,6 +532,11 @@ bool KinodynamicAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd s
   return true;
 }
 
+/**
+ * @brief 求解三次方程
+ * @param a,b,c,d 系数
+ * @return 实根集合
+ */
 vector<double> KinodynamicAstar::cubic(double a, double b, double c, double d)
 {
   vector<double> dts;
@@ -521,6 +572,11 @@ vector<double> KinodynamicAstar::cubic(double a, double b, double c, double d)
   }
 }
 
+/**
+ * @brief 求解四次方程
+ * @param a,b,c,d,e 系数
+ * @return 实根集合
+ */
 vector<double> KinodynamicAstar::quartic(double a, double b, double c, double d, double e)
 {
   vector<double> dts;
@@ -563,6 +619,9 @@ vector<double> KinodynamicAstar::quartic(double a, double b, double c, double d,
   return dts;
 }
 
+/**
+ * @brief 初始化相关参数和节点池
+ */
 void KinodynamicAstar::init()
 {
   /* ---------- map params ---------- */
@@ -585,11 +644,18 @@ void KinodynamicAstar::init()
   iter_num_ = 0;
 }
 
+/**
+ * @brief 设置环境指针
+ * @param env EDT环境指针
+ */
 void KinodynamicAstar::setEnvironment(const EDTEnvironment::Ptr& env)
 {
   this->edt_environment_ = env;
 }
 
+/**
+ * @brief 重置搜索器，清空所有状态
+ */
 void KinodynamicAstar::reset()
 {
   expanded_nodes_.clear();
@@ -610,7 +676,22 @@ void KinodynamicAstar::reset()
   is_shot_succ_ = false;
   has_path_ = false;
 }
-
+std::vector<Eigen::Vector3d> KinodynamicAstar::getGlobalKinoTraj()
+{
+  std::vector<Eigen::Vector3d> path;
+  if (path_nodes_.empty())
+    return path;
+  for (const auto& node : path_nodes_)
+  {
+    path.push_back(node->state.head(3));
+  }
+  return path;
+}
+/**
+ * @brief 获取搜索到的动力学轨迹采样点
+ * @param delta_t 采样间隔
+ * @return 轨迹点集合
+ */
 std::vector<Eigen::Vector3d> KinodynamicAstar::getKinoTraj(double delta_t)
 {
   vector<Vector3d> state_list;
@@ -656,6 +737,12 @@ std::vector<Eigen::Vector3d> KinodynamicAstar::getKinoTraj(double delta_t)
   return state_list;
 }
 
+/**
+ * @brief 获取轨迹采样点及边界导数信息
+ * @param ts 采样间隔（输入/输出）
+ * @param point_set 采样点集合（输出）
+ * @param start_end_derivatives 起止速度、加速度（输出）
+ */
 void KinodynamicAstar::getSamples(double& ts, vector<Eigen::Vector3d>& point_set,
                                   vector<Eigen::Vector3d>& start_end_derivatives)
 {
@@ -767,6 +854,10 @@ void KinodynamicAstar::getSamples(double& ts, vector<Eigen::Vector3d>& point_set
   start_end_derivatives.push_back(end_acc);
 }
 
+/**
+ * @brief 获取所有已访问节点
+ * @return 已访问节点集合
+ */
 std::vector<PathNodePtr> KinodynamicAstar::getVisitedNodes()
 {
   vector<PathNodePtr> visited;
@@ -774,6 +865,11 @@ std::vector<PathNodePtr> KinodynamicAstar::getVisitedNodes()
   return visited;
 }
 
+/**
+ * @brief 位置转栅格索引
+ * @param pt 位置
+ * @return 栅格索引
+ */
 Eigen::Vector3i KinodynamicAstar::posToIndex(Eigen::Vector3d pt)
 {
   Vector3i idx = ((pt - origin_) * inv_resolution_).array().floor().cast<int>();
@@ -785,12 +881,24 @@ Eigen::Vector3i KinodynamicAstar::posToIndex(Eigen::Vector3d pt)
   return idx;
 }
 
+/**
+ * @brief 时间转索引
+ * @param time 时间
+ * @return 时间索引
+ */
 int KinodynamicAstar::timeToIndex(double time)
 {
   int idx = floor((time - time_origin_) * inv_time_resolution_);
   return idx;
 }
 
+/**
+ * @brief 状态转移方程
+ * @param state0 当前状态
+ * @param state1 预测状态（输出）
+ * @param um 控制输入（加速度）
+ * @param tau 持续时间
+ */
 void KinodynamicAstar::stateTransit(Eigen::Matrix<double, 6, 1>& state0, Eigen::Matrix<double, 6, 1>& state1,
                                     Eigen::Vector3d um, double tau)
 {

@@ -148,6 +148,8 @@ class KinodynamicAstar {
   double estimateHeuristic(Eigen::VectorXd x1, Eigen::VectorXd x2,
                            double& optimal_time);
 
+
+
   /* state propagation */
   void stateTransit(Eigen::Matrix<double, 6, 1>& state0,
                     Eigen::Matrix<double, 6, 1>& state1, Eigen::Vector3d um,
@@ -163,11 +165,12 @@ class KinodynamicAstar {
   void setParam(ros::NodeHandle& nh);
   void init();
   void reset();
+  std::vector<Eigen::Vector3d> getGlobalKinoTraj();
   int search(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
              Eigen::Vector3d start_acc, Eigen::Vector3d end_pt,
              Eigen::Vector3d end_vel, bool init, bool dynamic = false,
              double time_start = -1.0);
-
+  std::vector<Eigen::Vector3d> GetShotTraj();
   void setEnvironment(const EDTEnvironment::Ptr& env);
 
   std::vector<Eigen::Vector3d> getKinoTraj(double delta_t);

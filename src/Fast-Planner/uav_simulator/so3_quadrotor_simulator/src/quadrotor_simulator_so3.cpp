@@ -160,6 +160,7 @@ getControl(const QuadrotorSimulator::Quadrotor& quad, const Command& cmd)
 static void
 cmd_callback(const quadrotor_msgs::SO3Command::ConstPtr& cmd)
 {
+  std::cout<<"cmd_callback"<<std::endl;
   command.force[0]         = cmd->force.x;
   command.force[1]         = cmd->force.y;
   command.force[2]         = cmd->force.z;
@@ -292,6 +293,7 @@ main(int argc, char** argv)
       state                 = quad.getState();
       stateToOdomMsg(state, odom_msg);
       quadToImuMsg(quad, imu);
+      std::cout<<"update odom imu"<<std::endl;
       odom_pub.publish(odom_msg);
       imu_pub.publish(imu);
     }

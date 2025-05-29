@@ -160,7 +160,8 @@ bool FastPlannerManager::kinodynamicReplan(Eigen::Vector3d start_pt, Eigen::Vect
   } else {
     cout << "[kino replan]: kinodynamic search success." << endl;
   }
-
+  plan_data_.shot_path_ = kino_path_finder_->GetShotTraj(); // 获取全局动力学路径
+  plan_data_.all_kino_path_ = kino_path_finder_->getGlobalKinoTraj();// 获取全部路径点
   plan_data_.kino_path_ = kino_path_finder_->getKinoTraj(0.01); // 保存动力学路径
 
   t_search = (ros::Time::now() - t1).toSec(); // 搜索耗时

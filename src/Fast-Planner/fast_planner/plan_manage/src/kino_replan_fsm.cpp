@@ -42,7 +42,11 @@ void KinoReplanFSM::init(ros::NodeHandle& nh) {
   replan_pub_  = nh.advertise<std_msgs::Empty>("/planning/replan", 10); // 重新规划话题
   new_pub_     = nh.advertise<std_msgs::Empty>("/planning/new", 10); // 新轨迹话题
   bspline_pub_ = nh.advertise<plan_manage::Bspline>("/planning/bspline", 10); // B样条轨迹话题
+  kino_path_pub_ = nh.advertise<nav_msgs::Path>("/planning/kino_path", 10); // Kinodynamic 路径话题
+  all_kino_path_pub_ = nh.advertise<nav_msgs::Path>("/planning/all_kino_path", 10); // Kinodynamic 路径话题
+  shot_path_pub_ = nh.advertise<nav_msgs::Path>("/planning/shot_path", 10); // shot路径话题
 }
+
 
 // 航点回调函数
 void KinoReplanFSM::waypointCallback(const nav_msgs::PathConstPtr& msg) {
@@ -177,7 +181,6 @@ void KinoReplanFSM::execFSMCallback(const ros::TimerEvent& e) {
       } else if ((info->start_pos_ - pos).norm() < replan_thresh_) { // 距离起点很近
         // cout << "near start" << endl;
         return;
-
       } else {
         changeFSMExecState(REPLAN_TRAJ, "FSM"); // 其他情况进入重新规划
       }
@@ -294,7 +297,9 @@ void KinoReplanFSM::checkCollisionCallback(const ros::TimerEvent& e) {
 bool KinoReplanFSM::callKinodynamicReplan() {
   bool plan_success =
       planner_manager_->kinodynamicReplan(start_pt_, start_vel_, start_acc_, end_pt_, end_vel_); // 调用动力学可行轨迹规划
-
+ 
+  cout<<"START.PT.X: "<<start_pt_(0)<<" Y: "<<start_pt_(1)<<" Z: "<<start_pt_(2)<<endl;
+  cout<<"END.PT.X: "<<end_pt_(0)<<" Y: "<<end_pt_(1)<<" Z: "<<end_pt_(2)<<endl;
   if (plan_success) {
 
     planner_manager_->planYaw(start_yaw_); // 规划偏航角
@@ -336,7 +341,47 @@ bool KinoReplanFSM::callKinodynamicReplan() {
     visualization_->drawGeometricPath(plan_data->kino_path_, 0.075, Eigen::Vector4d(1, 1, 0, 0.4)); // 可视化动力学路径
     visualization_->drawBspline(info->position_traj_, 0.1, Eigen::Vector4d(1.0, 0, 0.0, 1), true, 0.2,
                                 Eigen::Vector4d(1, 0, 0, 1)); // 可视化B样条
+    nav_msgs::Path kino_path; // 创建导航路径消息
+    kino_path.header.frame_id = "world"; // 设置坐标系
+    kino_path.header.stamp    = ros::Time::now(); // 设置时间戳
+    for (const auto& pt : plan_data->kino_path_) { // 遍历动力学路径点
+      geometry_msgs::PoseStamped pose;
+      pose.pose.position.x = pt(0);
+      pose.pose.position.y = pt(1);
+      pose.pose.position.z = pt(2);
+      pose.pose.orientation.w = 1.0; // 设置默认朝向
+      kino_path.poses.push_back(pose); // 添加到路径中
+    }
+      kino_path_pub_.publish(kino_path); // 发布全局动力学路径
 
+    nav_msgs::Path all_kino_path; // 创建导航路径消息
+    all_kino_path.header.frame_id = "world"; // 设置坐标系
+    all_kino_path.header.stamp    = ros::Time::now(); // 设置时间戳
+    for (const auto& pt : plan_data->all_kino_path_) { // 遍历动力学路径点
+      geometry_msgs::PoseStamped pose;
+      pose.pose.position.x = pt(0);
+      pose.pose.position.y = pt(1);
+      pose.pose.position.z = pt(2);
+      pose.pose.orientation.w = 1.0; // 设置默认朝向
+      all_kino_path.poses.push_back(pose); // 添加到路径中
+    }
+    all_kino_path_pub_.publish(all_kino_path); // 发布全局动力学路径
+
+    nav_msgs::Path shot_path; // 创建导航路径消息
+    shot_path.header.frame_id = "world"; // 设置坐标系
+    shot_path.header.stamp    = ros::Time::now(); // 设置时间戳
+    for (const auto& pt : plan_data->shot_path_) { // 遍历 shot 路径点
+      geometry_msgs::PoseStamped pose;
+      pose.pose.position.x = pt(0);
+      pose.pose.position.y = pt(1);
+      pose.pose.position.z = pt(2);
+      pose.pose.orientation.w = 1.0; // 设置默认朝向
+      shot_path.poses.push_back(pose); // 添加到路径中
+    }
+    shot_path_pub_.publish(shot_path); // 发布 shot 路径
+    cout << "generate new traj success." << endl; // 打印成功信息
+    cout<<"all kino path end pt: X:"<<plan_data->all_kino_path_.back()(0)<<"Y"<<plan_data->all_kino_path_.back()(1)<<endl;
+    cout<<"all kino path end pt: X:"<<plan_data->kino_path_.back()(0)<<"Y"<<plan_data->kino_path_.back()(1)<<endl;
     return true; // 规划成功
 
   } else {
