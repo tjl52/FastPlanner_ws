@@ -389,6 +389,8 @@ void KinodynamicAstar::retrievePath(PathNodePtr end_node)
 
 /**
  * @brief 启发式代价估计函数
+ * 这个四次多项式的推导，通常基于**最小化加速度平方积分（即最小能量轨迹）**的条件下，已知起点/终点的位置和速度，求解从起点到终点的最优时间。
+也就是：已知起点位置、速度，终点位置、速度，最优轨迹的时间是多少？
  * @param x1 当前状态
  * @param x2 目标状态
  * @param optimal_time 返回最优时间
@@ -396,6 +398,7 @@ void KinodynamicAstar::retrievePath(PathNodePtr end_node)
  */
 double KinodynamicAstar::estimateHeuristic(Eigen::VectorXd x1, Eigen::VectorXd x2, double& optimal_time)
 {
+  //构建根据位置和速度计算启发式代价的多项式
   const Vector3d dp = x2.head(3) - x1.head(3); // 位置差
   const Vector3d v0 = x1.segment(3, 3);        // 当前速度
   const Vector3d v1 = x2.segment(3, 3);        // 目标速度
